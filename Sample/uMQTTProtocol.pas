@@ -78,7 +78,7 @@ begin
     cmbxQoS.AddItem(GetEnumName(TypeInfo(TQoSLevel), Byte(vQoS)), nil);
   cmbxQos.ItemIndex := 1;
 
-  fMQTTCli := TMQTTDefaultClientBuilder.NewDefaultClient(stIndy, 15);
+  fMQTTCli := TMQTTDefaultClientBuilder.NewDefaultClient(stOverbyte, 15);
   fMQTTCli.OnConnected := HandleConnected;
   fMQTTCli.OnDisconnected := HandleDisconnected;
   fMQTTCli.OnPuback := HandlePublishAcknowledge;

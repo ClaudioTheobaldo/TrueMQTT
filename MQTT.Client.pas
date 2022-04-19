@@ -5,7 +5,6 @@ interface
 uses
   System.SysUtils, System.Classes,
   System.Generics.Collections, System.Generics.Defaults,
-  OverbyteIcsWndControl, OverbyteIcsWSocket,
   MQTT.Types, MQTT.ITimer,
   MQTT.ISocket, MQTT.IMQTTPacketBuilder;
 
