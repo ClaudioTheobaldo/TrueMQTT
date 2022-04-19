@@ -163,7 +163,7 @@ end;
 procedure TfrmMQTT.HandlePublishComplete(pPacketIdentifier: UInt16;
   const pTopic: string);
 begin
-  redt.Lines.Add(Format('Publish packet [PacketID: %d | Topic: %s] has been complete at %s',
+  redt.Lines.Add(Format('Publish packet [PacketID: %d | Topic: %s] has been completed at %s',
     [pPacketIdentifier, pTopic, DateTimeToStr(now)]));
 end;
 

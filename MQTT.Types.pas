@@ -23,7 +23,7 @@ type
     PINGREQ, // C1 -> S1 (PING request)
     PINGRESP, // C1 <- S1 (PING response)
     DISCONNECT, // C1 -> S1 (Client is disconnecting)
-    ReservedEx
+    AUTH
   );
 
   TMQTTClientState = (mcsDisconnected, mcsConnecting, mcsConnected);

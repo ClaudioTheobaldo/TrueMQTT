@@ -64,8 +64,9 @@ type
     // Timer Handlers
     procedure KeepAliveHandler(Sender: TObject);
   public
-    constructor Create(pSocket: IMQTTSocket; pTimer: IMQTTTimer; pPacketBuilder: IMQTTPacketBuilder;
-       pKeepAliveSecondsInterval: UInt16 = 10); reintroduce;
+    constructor Create(pSocket: IMQTTSocket; pTimer: IMQTTTimer;
+      pPacketBuilder: IMQTTPacketBuilder;
+      pKeepAliveSecondsInterval: UInt16 = 10); reintroduce;
     destructor Destroy; override;
 
     function Connect(const pHost: string; pPort: UInt16): Boolean;
@@ -189,6 +190,7 @@ begin
   if fState <> mcsConnected then
     Exit;
 
+  // Need to know when to switch the duplicate flag
   fSocket.Send(fPacketBuilder.BuildPublishPacket(pTopic, pPayload, pRetain, False{DUP Flag}, pQosLevel, vPacketID));
   if pQosLevel = qlAtLeastOnceDelivery then
     fPublishQosOneDict.AddOrSetValue(vPacketID, pTopic)
@@ -241,7 +243,7 @@ end;
 {$REGION SOCKETEVENTHANDLERS}
 procedure TMQTTClient.HandleSessionConnected(Sender: TObject);
 begin
-  fSocket.Send(fPacketBuilder.BuildConnectPacket(fKeepAliveSecondInterval));
+  fSocket.Send(fPacketBuilder.BuildConnectPacket(fKeepAliveSecondInterval, EmptyStr, EmptyStr));
 end;
 
 procedure TMQTTClient.HandleSessionClosed(Sender: TObject);
@@ -400,7 +402,6 @@ begin
   if Assigned(fOnPublish) then
     fOnPublish(vPacketID, vTopic, vPayload);
 end;
-
 
 procedure TMQTTClient.HandleSuback(pPacket: TBytes);
 const
