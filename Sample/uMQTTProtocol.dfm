@@ -2,8 +2,8 @@ object frmMQTT: TfrmMQTT
   Left = 0
   Top = 0
   Caption = 'frmMQTT'
-  ClientHeight = 484
-  ClientWidth = 632
+  ClientHeight = 659
+  ClientWidth = 614
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -23,7 +23,7 @@ object frmMQTT: TfrmMQTT
     Caption = 'SubTopic'
   end
   object lblPubTopic: TLabel
-    Left = 280
+    Left = 256
     Top = 7
     Width = 43
     Height = 13
@@ -51,22 +51,57 @@ object frmMQTT: TfrmMQTT
     Caption = 'UnsubTopic'
   end
   object lblQoS: TLabel
-    Left = 112
-    Top = 104
+    Left = 16
+    Top = 264
     Width = 116
     Height = 13
     Caption = 'QoS (Quality of Service)'
   end
   object lblPubPayload: TLabel
-    Left = 280
+    Left = 256
     Top = 53
     Width = 56
     Height = 13
     Caption = 'PubPayload'
   end
+  object lblUsername: TLabel
+    Left = 256
+    Top = 103
+    Width = 48
+    Height = 13
+    Caption = 'Username'
+  end
+  object lblPassword: TLabel
+    Left = 256
+    Top = 149
+    Width = 46
+    Height = 13
+    Caption = 'Password'
+  end
+  object lblWillTopic: TLabel
+    Left = 112
+    Top = 149
+    Width = 41
+    Height = 13
+    Caption = 'WillTopic'
+  end
+  object lblWillMessage: TLabel
+    Left = 112
+    Top = 195
+    Width = 58
+    Height = 13
+    Caption = 'WillMessage'
+  end
+  object lblClientId: TLabel
+    Left = 112
+    Top = 103
+    Width = 38
+    Height = 13
+    Caption = 'ClientID'
+  end
   object btnSub: TButton
     Left = 16
-    Top = 70
+    Top = 91
     Width = 75
     Height = 25
     Caption = 'Sub'
@@ -84,9 +119,9 @@ object frmMQTT: TfrmMQTT
   end
   object redt: TRichEdit
     Left = 8
-    Top = 221
-    Width = 609
-    Height = 255
+    Top = 343
+    Width = 601
+    Height = 308
     Font.Charset = ANSI_CHARSET
     Font.Color = clWindowText
     Font.Height = -11
@@ -105,7 +140,7 @@ object frmMQTT: TfrmMQTT
     Text = 'dev/random'
   end
   object edtPubTopic: TEdit
-    Left = 280
+    Left = 256
     Top = 26
     Width = 121
     Height = 21
@@ -123,7 +158,7 @@ object frmMQTT: TfrmMQTT
   end
   object btnDisconnect: TButton
     Left = 16
-    Top = 132
+    Top = 166
     Width = 75
     Height = 25
     Caption = 'Disconnect'
@@ -148,7 +183,7 @@ object frmMQTT: TfrmMQTT
   end
   object btnUnsub: TButton
     Left = 16
-    Top = 101
+    Top = 135
     Width = 75
     Height = 25
     Caption = 'Unsub'
@@ -164,15 +199,15 @@ object frmMQTT: TfrmMQTT
     Text = 'dev/random'
   end
   object cmbxQoS: TComboBox
-    Left = 112
-    Top = 123
+    Left = 16
+    Top = 283
     Width = 145
     Height = 21
     Style = csDropDownList
     TabOrder = 11
   end
   object edtPubPayload: TEdit
-    Left = 280
+    Left = 256
     Top = 72
     Width = 177
     Height = 21
@@ -181,11 +216,51 @@ object frmMQTT: TfrmMQTT
   end
   object btnGetCurrentSubscriptions: TButton
     Left = 16
-    Top = 190
+    Top = 310
     Width = 153
     Height = 25
     Caption = 'GetCurrentSubscriptions'
     TabOrder = 13
     OnClick = btnGetCurrentSubscriptionsClick
+  end
+  object edtUsername: TEdit
+    Left = 256
+    Top = 122
+    Width = 121
+    Height = 21
+    TabOrder = 14
+    Text = 'claudio'
+  end
+  object edtPassword: TEdit
+    Left = 256
+    Top = 168
+    Width = 121
+    Height = 21
+    TabOrder = 15
+    Text = 'seventh'
+  end
+  object edtWillTopic: TEdit
+    Left = 112
+    Top = 168
+    Width = 121
+    Height = 21
+    TabOrder = 16
+    Text = 'dev/iwillbehere'
+  end
+  object edtWillMessage: TEdit
+    Left = 112
+    Top = 214
+    Width = 121
+    Height = 21
+    TabOrder = 17
+    Text = 'IAMHERE'
+  end
+  object edtClientId: TEdit
+    Left = 112
+    Top = 122
+    Width = 121
+    Height = 21
+    TabOrder = 18
+    Text = 'RandomClientID99'
   end
 end

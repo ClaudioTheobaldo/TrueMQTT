@@ -14,6 +14,7 @@ type
     fSocket: IMQTTSocket;
     fHost: string;
     fPort: UInt16;
+    fConnectParams: TConnectParams;
 
     fState: TMQTTClientState;
 
@@ -69,7 +70,15 @@ type
       pKeepAliveSecondsInterval: UInt16 = 10); reintroduce;
     destructor Destroy; override;
 
-    function Connect(const pHost: string; pPort: UInt16): Boolean;
+    function Connect(const pHost: string; pPort: UInt16;
+      pConnectParams: TConnectParams): Boolean; overload;
+    function Connect(const pHost: string; pPort: UInt16;
+      const pClientID: string = ''; pWillQos: TQosLevel = qlAtMostOnceDelivery;
+      pWillRetain: Boolean = False; const pWillTopic: string = '';
+      const pWillMessage: string = ''; const pUsername: string = '';
+      const pPassword: string = ''): Boolean; overload;
+    function Connect(const pHost: string; pPort: UInt16;
+      const pUsername, pPassword: string): Boolean; overload;
     procedure Disconnect;
 
     // MQTT messages
@@ -151,8 +160,37 @@ end;
 {$ENDREGION}
 
 {$REGION Conn-Disc}
-function TMQTTClient.Connect(const pHost: string; pPort: UInt16): Boolean;
+function TMQTTClient.Connect(const pHost: string; pPort: UInt16;
+  pConnectParams: TConnectParams): Boolean;
 begin
+  fConnectParams := pConnectParams;
+  if (fState in [mcsConnecting, mcsConnected]) then
+    Exit(False);
+  Exit(fSocket.Connect(pHost, pPort));
+  fHost := pHost;
+  fPort := pPort;
+end;
+
+function TMQTTClient.Connect(const pHost: string; pPort: UInt16;
+  const pClientID: string = ''; pWillQos: TQosLevel = qlAtMostOnceDelivery;
+  pWillRetain: Boolean = False; const pWillTopic: string = '';
+  const pWillMessage: string = ''; const pUsername: string = '';
+  const pPassword: string = ''): Boolean;
+begin
+  fConnectParams := TConnectParams.Create(TQosLevel.qlAtMostOnceDelivery, False,
+    pClientID, pWillTopic, pWillMessage, pUsername, pPassword);
+  if (fState in [mcsConnecting, mcsConnected]) then
+    Exit(False);
+  Exit(fSocket.Connect(pHost, pPort));
+  fHost := pHost;
+  fPort := pPort;
+end;
+
+function TMQTTClient.Connect(const pHost: string; pPort: UInt16;
+  const pUsername, pPassword: string): Boolean;
+begin
+  fConnectParams := TConnectParams.Create(TQosLevel.qlAtMostOnceDelivery, False,
+    EmptyStr, EmptyStr, EmptyStr, pUsername, pPassword);
   if (fState in [mcsConnecting, mcsConnected]) then
     Exit(False);
   Exit(fSocket.Connect(pHost, pPort));
@@ -168,16 +206,8 @@ begin
     fKeepAliveTimer.Enable(False);
     fSocket.Send(fPacketBuilder.BuildDisconnectPacket);
     fSocket.Disconnect;
+    fCurrentSubscriptions.Clear;
   end;
-end;
-
-function TMQTTClient.GetCurrentSubscriptions: TStringList;
-var
-  vSubscriptions: TTopic;
-begin
-  Result := TStringList.Create;
-  for vSubscriptions in fCurrentSubscriptions do
-    Result.Add(vSubscriptions.TopicFilter.Topic);
 end;
 {$ENDREGION}
 
@@ -243,7 +273,7 @@ end;
 {$REGION SOCKETEVENTHANDLERS}
 procedure TMQTTClient.HandleSessionConnected(Sender: TObject);
 begin
-  fSocket.Send(fPacketBuilder.BuildConnectPacket(fKeepAliveSecondInterval, EmptyStr, EmptyStr));
+  fSocket.Send(fPacketBuilder.BuildConnectPacket(fKeepAliveSecondInterval, fConnectParams));
 end;
 
 procedure TMQTTClient.HandleSessionClosed(Sender: TObject);
@@ -491,6 +521,17 @@ procedure TMQTTClient.HandlePingResp;
 begin
   if Assigned(fOnPingResp) then
     fOnPingResp(Self);
+end;
+{$ENDREGION}
+
+{$REGION UTILITIES}
+function TMQTTClient.GetCurrentSubscriptions: TStringList;
+var
+  vSubscriptions: TTopic;
+begin
+  Result := TStringList.Create;
+  for vSubscriptions in fCurrentSubscriptions do
+    Result.Add(vSubscriptions.TopicFilter.Topic);
 end;
 {$ENDREGION}
 

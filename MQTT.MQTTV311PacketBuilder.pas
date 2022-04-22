@@ -11,8 +11,8 @@ type
   strict private
     fPacketId: UInt16;
   public
-    function BuildConnectPacket(pKeepAliveInterval: UInt16; const pUsername: string;
-      const pPassword: string): TBytes;
+    function BuildConnectPacket(pKeepAliveInterval: UInt16;
+      pClientParams: TConnectParams): TBytes;
     function BuildPublishPacket(const pTopic: string; pPayload: TBytes;
       pRetain, pDup: Boolean; pQosLevel: TQosLevel; var pPacketID: UInt16): TBytes;
     function BuildPubrelPacket(pPacketIdentifier: UInt16): TBytes;
@@ -33,109 +33,148 @@ const
 { TMQTTV311PacketBuilder }
 
 function TMQTTV311PacketBuilder.BuildConnectPacket(pKeepAliveInterval: UInt16;
-  const pUsername: string; const pPassword: string): TBytes;
+  pClientParams: TConnectParams): TBytes;
+const
+  c_CONNECTVariableHeaderSize = 10;
 var
   vCount, vRemainingLength: Integer;
   vPacketTypeAndFlags, vConnectFlags: Byte;
-  vFixedHeader, vEncodedRemainingLength,
-    vUsernameAsBytes, vPasswordAsBytes: TBytes;
-  vVariableHeader: array[0..9] of Byte;
-  vClientLength, vUserNameLength, vPasswordLength: UInt16;
+  vEncodedRemainingLength, vClientIdAsBytes, vWillTopicAsBytes, vWillMessageAsBytes,
+  vUsernameAsBytes, vPasswordAsBytes: TBytes;
+  vClientLength, vWillTopicLength, vWillMessageLength,
+  vUserNameLength, vPasswordLength: UInt16;
 begin
-  // WARNING INCOMPLETE FUNCTION, NEEDS TO VALIDATE USERNAME, PASSWORD, QoS AND
-  // A BUNCH OF OTHER STUFF...
-
+  vClientLength := 0;
+  vWillMessageLength := 0;
+  vWillTopicLength := 0;
   vConnectFlags := 0;
 
   // 1 - Fixed header
   vPacketTypeAndFlags := Byte(TMQTTControlPacket.CONNECT) shl 4;
 
-  // 2 - Variable header
-  // 2.1 - Protocol Name
-  vVariableHeader[0] := 0;
-  vVariableHeader[1] := 4;
-  vVariableHeader[2] := 77; // M
-  vVariableHeader[3] := 81; // Q
-  vVariableHeader[4] := 84; // T
-  vVariableHeader[5] := 84; // T
-
-  // 2.2 - Protocol Level (4) MQTT 3.1.1
-  vVariableHeader[6] := 4;
-
   // 2.3 - Connect Flags
-
-  if pUserName <> EmptyStr then
-  begin
-    vUsernameAsBytes := TEncoding.UTF8.GetBytes(pUserName);
-    vUsernameLength := Length(vUsernameAsBytes);
-    SetNthBit(vConnectFlags, 7); //Bit-7 = User-name
-  end;
-  if pPassword <> EmptyStr then
-  begin
-    vPasswordAsBytes := TEncoding.UTF8.GetBytes(pPassword);
-    vPasswordLength := Length(vPasswordAsBytes);
-    SetNthBit(vConnectFlags, 6); //Bit-6 = Password
-  end;
-  //SetNthBit(vConnectFlags, 5); //Bit-5 = Will-retain
-  //SetNthBit(vConnectFlags, 4); //Bit-4 = Will-QoS(4)
-  //SetNthBit(vConnectFlags, 3); //Bit-3 = Will-QoS(3)
-  //SetNthBit(vConnectFlags, 2); //Bit-2 = Will-Flag
+  if pClientParams.WillRetain then
+    SetNthBit(vConnectFlags, 5); //Bit-5 = Will-Retain
+  vConnectFlags := vConnectFlags or (Byte(pClientParams.WillQos) shl 3);
 
   // Let the server generate the ClientID.
   // WillQos must be 0, server must accept anonymous clients and
   // empty client-ids
   SetNthBit(vConnectFlags, 1); //Bit-1 = Clean Session
-  //SetNthBit(vConnectFlags, 0); //Bit-0 = Reserved (must be zero)
-
-  vVariableHeader[7] := vConnectFlags;
-
-  // 2.4 - Keep alive
-  vVariableHeader[8] := PByte(@pKeepAliveInterval)[1];
-  vVariableHeader[9] := PByte(@pKeepAliveInterval)[0];
 
   // 3 - Payload
-  // ClientId
-  vClientLength := 0;
-  // WillTopic
-  // WillMessage
-  // Username
-  // Password
+  vRemainingLength := c_CONNECTVariableHeaderSize; //Variable header len + Payload len
 
-  vRemainingLength := Length(vVariableHeader) + 2; //Variable header len + Payload len
+  if pClientParams.ClientId <> EmptyStr then
+  begin
+    vClientIdAsBytes := TEncoding.UTF8.GetBytes(pClientParams.ClientId);
+    vClientLength := Length(vClientIdAsBytes);
+    Inc(vRemainingLength, 2 + vClientLength);
+  end
+  else
+    Inc(vRemainingLength, Sizeof(Word));
+
+  if pClientParams.WillTopic <> EmptyStr then
+  begin
+    vWillTopicAsBytes := TEncoding.UTF8.GetBytes(pClientParams.WillTopic);
+    vWillTopicLength := Length(vWillTopicAsBytes);
+    Inc(vRemainingLength, 2 + vWillTopicLength);
+    SetNthBit(vConnectFlags, 2); //Bit-2 = Will-Flag
+  end;
+
+  if (pClientParams.WillMessage <> EmptyStr) and (pClientParams.WillTopic <> EmptyStr) then
+  begin
+    vWillMessageAsBytes := TEncoding.UTF8.GetBytes(pClientParams.WillMessage);
+    vWillMessageLength := Length(vWillMessageAsBytes);
+    Inc(vRemainingLength, 2 + vWillMessageLength);
+  end;
+
+  if pClientParams.UserName <> EmptyStr then
+  begin
+    vUsernameAsBytes := TEncoding.UTF8.GetBytes(pClientParams.UserName);
+    vUsernameLength := Length(vUsernameAsBytes);
+    SetNthBit(vConnectFlags, 7); //Bit-7 = User-name
+    Inc(vRemainingLength, 2 + vUsernameLength);
+  end;
+
+  if (pClientParams.Password <> EmptyStr) and (pClientParams.Username <> EmptyStr) then
+  begin
+    vPasswordAsBytes := TEncoding.UTF8.GetBytes(pClientParams.Password);
+    vPasswordLength := Length(vPasswordAsBytes);
+    SetNthBit(vConnectFlags, 6); //Bit-6 = Password
+    Inc(vRemainingLength, 2 + vPasswordLength);
+  end;
   vEncodedRemainingLength := EncodeVarInt32(vRemainingLength);
-  SetLength(vFixedHeader, 1 + Length(vEncodedRemainingLength));
-  vFixedHeader[0] := vPacketTypeAndFlags;
-  Move(vEncodedRemainingLength[0], vFixedHeader[1], Length(vEncodedRemainingLength));
 
   // FixedHeaderLen + VariableHeaderLen + PayloadLen
-  SetLength(Result, Length(vFixedHeader) + vRemainingLength);
+  SetLength(Result, 1 + Length(vEncodedRemainingLength) + vRemainingLength);
 
   // 1 - FixedHeader
   vCount := 0;
-  Move(vFixedHeader[0], Result[vCount], Length(vFixedHeader));
-  Inc(vCount, Length(vFixedHeader));
+  Result[vCount] := vPacketTypeAndFlags;
+  Move(vEncodedRemainingLength[0], Result[vCount + 1], Length(vEncodedRemainingLength));
+  Inc(vCount, 1 + Length(vEncodedRemainingLength));
+
   // 2 - VariableHeader
-  Move(vVariableHeader[0], Result[vCount], Length(vVariableHeader));
-  Inc(vCount, Length(vVariableHeader));
+  // 2.1 - Protocol Name
+  Result[vCount] := 0;
+  Result[vCount + 1] := 4;
+  Result[vCount + 2] := 77; // M
+  Result[vCount + 3] := 81; // Q
+  Result[vCount + 4] := 84; // T
+  Result[vCount + 5] := 84; // T
+  // 2.2 - Protocol Level (4) MQTT 3.1.1
+  Result[vCount + 6] := 4;
+  Result[vCount + 7] := vConnectFlags;
+  // 2.4 - Keep alive
+  Result[vCount + 8] := PByte(@pKeepAliveInterval)[1];
+  Result[vCount + 9]  := PByte(@pKeepAliveInterval)[0];
+  Inc(vCount, c_CONNECTVariableHeaderSize);
+
   // 3 - Payload
   Result[vCount] := PByte(@vClientLength)[1];
   Result[vCount + 1] := PByte(@vClientLength)[0];
-  Inc(vCount, 2);
-  if pUserName <> EmptyStr then
+  Inc(vCount, Sizeof(Word));
+
+  if pClientParams.ClientId <> EmptyStr then
+  begin
+    Move(vClientIdAsBytes[0], Result[vCount], vClientLength);
+    Inc(vCount, vClientLength);
+  end;
+
+  if pClientParams.WillTopic <> EmptyStr then
+  begin
+    Result[vCount] := PByte(@vWillTopicLength)[1];
+    Result[vCount + 1] := PByte(@vWillTopicLength)[0];
+    Inc(vCount, Sizeof(Word));
+    Move(vWillTopicAsBytes[0], Result[vCount], vWillTopicLength);
+    Inc(vCount, vWillTopicLength);
+  end;
+
+  if pClientParams.WillMessage <> EmptyStr then
+  begin
+    Result[vCount] := PByte(@vWillMessageLength)[1];
+    Result[vCount + 1] := PByte(@vWillMessageLength)[0];
+    Inc(vCount, Sizeof(Word));
+    Move(vWillMessageAsBytes[0], Result[vCount], vWillMessageLength);
+    Inc(vCount, vWillMessageLength);
+  end;
+
+  if pClientParams.UserName <> EmptyStr then
   begin
     Result[vCount] := PByte(@vUserNameLength)[1];
     Result[vCount + 1] := PByte(@vUserNameLength)[0];
-    Inc(vCount, 2);
+    Inc(vCount, Sizeof(Word));
     Move(vUsernameAsBytes[0], Result[vCount], vUserNameLength);
     Inc(vCount, vUserNameLength);
   end;
-  if pPassword <> EmptyStr then
+
+  if (pClientParams.Password <> EmptyStr) and (pClientParams.Username <> EmptyStr) then
   begin
     Result[vCount] := PByte(@vPasswordLength)[1];
     Result[vCount + 1] := PByte(@vPasswordLength)[0];
-    Inc(vCount, 2);
+    Inc(vCount, Sizeof(Word));
     Move(vPasswordAsBytes[0], Result[vCount], vPasswordLength);
-    //Inc(vCount, vPasswordLength);
   end;
 end;
 

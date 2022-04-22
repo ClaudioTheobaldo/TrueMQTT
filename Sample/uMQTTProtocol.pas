@@ -25,10 +25,20 @@ type
     lblSubTopic: TLabel;
     lblUnsubTopic: TLabel;
     lblQoS: TLabel;
+    lblClientId: TLabel;
+    lblWillTopic: TLabel;
+    lblWillMessage: TLabel;
+    lblUsername: TLabel;
+    lblPassword: TLabel;
     lblHost: TLabel;
     lblPort: TLabel;
     edtHost: TEdit;
     edtPort: TEdit;
+    edtClientId: TEdit;
+    edtWillTopic: TEdit;
+    edtWillMessage: TEdit;
+    edtUsername: TEdit;
+    edtPassword: TEdit;
     edtPubTopic: TEdit;
     edtPubPayload: TEdit;
     edtSubTopic: TEdit;
@@ -96,7 +106,16 @@ end;
 
 procedure TfrmMQTT.btnConnectClick(Sender: TObject);
 begin
-  if not fMQTTCli.Connect(edtHost.Text, StrToInt(edtPort.Text)) then
+{
+(const pHost: string; pPort: UInt16;
+      const pClientID: string = ''; pWillQos: TQosLevel = qlAtMostOnceDelivery;
+      pWillRetain: Boolean = False; const pWillTopic: string = '';
+      const pWillMessage: string = ''; const pUsername: string = '';
+      const pPassword: string = ''): Boolean; overload;
+}
+  if not fMQTTCli.Connect(edtHost.Text, StrToInt(edtPort.Text), edtClientId.Text,
+    TQosLevel(cmbxQos.ItemIndex), False, edtWillTopic.Text, edtWillMessage.Text,
+    edtUsername.Text, edtPassword.Text) then
     redt.Lines.Add('Already connected');
 end;
 
