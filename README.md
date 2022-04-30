@@ -1,2 +1,3 @@
 # TrueMQTT
-MQTT library for Delphi
+MQTT client library for Delphi.
+Not production ready.
