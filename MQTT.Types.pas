@@ -34,6 +34,9 @@ type
   TQosLevel = (qlAtMostOnceDelivery, qlAtLeastOnceDelivery, qlExactlyOnceDelivery);
 
   TOnData = procedure(pData: TBytes) of object;
+  TConnackEvent = procedure(pReturnCode: TConnackReturnCodes) of object;
+  TPacketIDEvent = procedure(pPacketID: UInt16) of object;
+  TSubackEvent = procedure(pPacketID:UInt16; pQosLevels: TArray<Integer>) of object;
   TSubscribeEvent = procedure(pPacketID: UInt16; pQoSLevel: TQoSLevel; const pTopic: string) of object;
   TUnsubscribeEvent = procedure(pPacketID: UInt16) of object;
   TPubackEvent = procedure(pPacketID: UInt16; const pTopic: string) of object;

@@ -9,7 +9,7 @@ type
   TSocketType = (stOverbyte, stIndy);
 
   TMQTTDefaultClientBuilder = class
-    class function NewDefaultClient(pSocketType: TSocketType;
+    class function BuildDefaultClient(pSocketType: TSocketType;
       pKeepAliveSecondsInterval: UInt16 = 10): TMQTTClient;
   end;
 
@@ -18,11 +18,11 @@ implementation
 uses
   MQTT.ISocket, MQTT.DefaultTimer,
   MQTT.OverbyteSocket, MQTT.IndySocket,
-  MQTT.MQTTV311PacketBuilder;
+  MQTT.V311PacketBuilder, MQTT.V311Parser;
 
 { TMQTTDefaultClientBuilder }
 
-class function TMQTTDefaultClientBuilder.NewDefaultClient(
+class function TMQTTDefaultClientBuilder.BuildDefaultClient(
   pSocketType: TSocketType; pKeepAliveSecondsInterval: UInt16): TMQTTClient;
 var
   vSocket: IMQTTSocket;
@@ -32,8 +32,8 @@ begin
     stIndy: vSocket := TMQTTIndySocket.Create;
   end;
 
-  Result := TMQTTClient.Create(vSocket,
-    TMQTTDefaultTimer.Create, TMQTTV311PacketBuilder.Create,
+  Result := TMQTTClient.Create(vSocket, TMQTTDefaultTimer.Create,
+    TMQTTV311PacketBuilder.Create, TMQTTV311Parser.Create,
     pKeepAliveSecondsInterval);
 end;
 

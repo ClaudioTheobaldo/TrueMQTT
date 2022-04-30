@@ -16,7 +16,7 @@ object frmMQTT: TfrmMQTT
   PixelsPerInch = 96
   TextHeight = 13
   object lblSubTopic: TLabel
-    Left = 488
+    Left = 448
     Top = 7
     Width = 43
     Height = 13
@@ -24,7 +24,7 @@ object frmMQTT: TfrmMQTT
   end
   object lblPubTopic: TLabel
     Left = 256
-    Top = 7
+    Top = 103
     Width = 43
     Height = 13
     Caption = 'PubTopic'
@@ -44,7 +44,7 @@ object frmMQTT: TfrmMQTT
     Caption = 'Port'
   end
   object lblUnsubTopic: TLabel
-    Left = 488
+    Left = 448
     Top = 53
     Width = 55
     Height = 13
@@ -59,21 +59,21 @@ object frmMQTT: TfrmMQTT
   end
   object lblPubPayload: TLabel
     Left = 256
-    Top = 53
+    Top = 149
     Width = 56
     Height = 13
     Caption = 'PubPayload'
   end
   object lblUsername: TLabel
     Left = 256
-    Top = 103
+    Top = 7
     Width = 48
     Height = 13
     Caption = 'Username'
   end
   object lblPassword: TLabel
     Left = 256
-    Top = 149
+    Top = 53
     Width = 46
     Height = 13
     Caption = 'Password'
@@ -132,7 +132,7 @@ object frmMQTT: TfrmMQTT
     Zoom = 100
   end
   object edtSubTopic: TEdit
-    Left = 488
+    Left = 448
     Top = 26
     Width = 121
     Height = 21
@@ -141,7 +141,7 @@ object frmMQTT: TfrmMQTT
   end
   object edtPubTopic: TEdit
     Left = 256
-    Top = 26
+    Top = 122
     Width = 121
     Height = 21
     TabOrder = 4
@@ -191,7 +191,7 @@ object frmMQTT: TfrmMQTT
     OnClick = btnUnsubClick
   end
   object edtUnsubTopic: TEdit
-    Left = 488
+    Left = 448
     Top = 72
     Width = 121
     Height = 21
@@ -208,7 +208,7 @@ object frmMQTT: TfrmMQTT
   end
   object edtPubPayload: TEdit
     Left = 256
-    Top = 72
+    Top = 168
     Width = 177
     Height = 21
     TabOrder = 12
@@ -225,7 +225,7 @@ object frmMQTT: TfrmMQTT
   end
   object edtUsername: TEdit
     Left = 256
-    Top = 122
+    Top = 26
     Width = 121
     Height = 21
     TabOrder = 14
@@ -233,7 +233,7 @@ object frmMQTT: TfrmMQTT
   end
   object edtPassword: TEdit
     Left = 256
-    Top = 168
+    Top = 72
     Width = 121
     Height = 21
     TabOrder = 15

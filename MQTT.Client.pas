@@ -6,7 +6,8 @@ uses
   System.SysUtils, System.Classes,
   System.Generics.Collections, System.Generics.Defaults,
   MQTT.Types, MQTT.ITimer,
-  MQTT.ISocket, MQTT.IMQTTPacketBuilder;
+  MQTT.ISocket, MQTT.IPacketBuilder,
+  MQTT.IParser;
 
 type
   TMQTTClient = class
@@ -14,14 +15,17 @@ type
     fSocket: IMQTTSocket;
     fHost: string;
     fPort: UInt16;
+
     fConnectParams: TConnectParams;
 
     fState: TMQTTClientState;
 
     fKeepAliveSecondInterval: UInt16;
-    fKeepAliveTimer: IMQTTTimer;
+    fKeepAliveTimer: ITimer;
 
-    fPacketBuilder: IMQTTPacketBuilder;
+    // Protocol Interfaces
+    fPacketBuilder: IPacketBuilder;
+    fParser: IParser;
 
     // Containers
     fPublishQosOneDict: TDictionary<UInt16, string>;
@@ -51,34 +55,40 @@ type
     procedure HandleDataAvailable(pData: TBytes);
 
     // Protocol handlers
-    // TODO - Need to handle timeouts to cleanup the dictionaries in case these
-    // messages never come to us.
-    procedure HandleConnack(pBytes: TBytes);
-    procedure HandlePuback(pBytes: TBytes);
-    procedure HandlePubrec(pBytes: TBytes);
-    procedure HandlePubComp(pBytes: TBytes);
-    procedure HandlePublish(pPacket: TBytes);
-    procedure HandleSuback(pPacket: TBytes);
-    procedure HandleUnsuback(pBytes: TBytes);
-    procedure HandlePingResp;
+    {
+      TODO - Need to handle timeouts to cleanup the dictionaries in case these
+      messages never come to us.
+    }
+
+    procedure HandleConnack(pReturnCode: TConnackReturnCodes);
+    procedure HandlePuback(pPacketID: Word);
+    procedure HandlePubrec(pPacketID: Word);
+    procedure HandlePubcomp(pPacketID: Word);
+    procedure HandlePublish(pPacketID: UInt16; const pTopic: string; pPayload: TBytes);
+    procedure HandleSuback(pPacketID:UInt16; pQosLevels: TArray<Integer>);
+    procedure HandleUnsuback(pPacketID: Word);
+    procedure HandlePing(pSender: TObject);
 
     // Timer Handlers
     procedure KeepAliveHandler(Sender: TObject);
   public
-    constructor Create(pSocket: IMQTTSocket; pTimer: IMQTTTimer;
-      pPacketBuilder: IMQTTPacketBuilder;
+    constructor Create(pSocket: IMQTTSocket; pTimer: ITimer;
+      pPacketBuilder: IPacketBuilder; pParser: IParser;
       pKeepAliveSecondsInterval: UInt16 = 10); reintroduce;
     destructor Destroy; override;
 
     function Connect(const pHost: string; pPort: UInt16;
       pConnectParams: TConnectParams): Boolean; overload;
+
     function Connect(const pHost: string; pPort: UInt16;
       const pClientID: string = ''; pWillQos: TQosLevel = qlAtMostOnceDelivery;
       pWillRetain: Boolean = False; const pWillTopic: string = '';
       const pWillMessage: string = ''; const pUsername: string = '';
       const pPassword: string = ''): Boolean; overload;
+
     function Connect(const pHost: string; pPort: UInt16;
       const pUsername, pPassword: string): Boolean; overload;
+
     procedure Disconnect;
 
     // MQTT messages
@@ -88,12 +98,13 @@ type
     procedure Unsubscribe(pTopics: TArray<string>);
     procedure PingReq;
 
+    // Utilities
+    function GetProtocolVersion: string;
+    function GetCurrentSubscriptions: TStringList;
+
     // Properties
     property Host: string read fHost;
     property Port: UInt16 read fPort;
-
-    // Utilities
-    function GetCurrentSubscriptions: TStringList;
 
     // Events
     property OnConnected: TNotifyEvent read fOnConnected write fOnConnected;
@@ -110,13 +121,14 @@ type
 implementation
 
 uses
-  MQTT.Utils;
+  MQTT.Utils, MQTT.Consts;
 
 { TMQTTClient }
 
 {$REGION Ctor-Dtor}
-constructor TMQTTClient.Create(pSocket: IMQTTSocket; pTimer: IMQTTTimer;
-  pPacketBuilder: IMQTTPacketBuilder; pKeepAliveSecondsInterval: UInt16 = 10);
+constructor TMQTTClient.Create(pSocket: IMQTTSocket; pTimer: ITimer;
+  pPacketBuilder: IPacketBuilder; pParser: IParser;
+  pKeepAliveSecondsInterval: UInt16 = 10);
 begin
   if pSocket = nil then
     raise Exception.Create('Unable to create MQTTClient because of nil Socket reference');
@@ -124,6 +136,8 @@ begin
     raise Exception.Create('Unable to create MQTTClient because of nil Timer reference');
   if pPacketBuilder = nil then
     raise Exception.Create('Unable to create MQTTClient because of nil PacketBuilder reference');
+  if pParser = nil then
+    raise Exception.Create('Unable to create MQTTClient because of nil Parser reference');
 
   fState := TMQTTClientState.mcsDisconnected;
   fKeepAliveSecondInterval := pKeepAliveSecondsInterval;
@@ -138,6 +152,16 @@ begin
   fKeepAliveTimer.SetTimerHandler(KeepAliveHandler);
 
   fPacketBuilder := pPacketBuilder;
+
+  fParser := pParser;
+  fParser.SetOnConnack(HandleConnack);
+  fParser.SetOnPuback(HandlePuback);
+  fParser.SetOnPubrec(HandlePubrec);
+  fParser.SetOnPubcomp(HandlePubcomp);
+  fParser.SetOnPublish(HandlePublish);
+  fParser.SetOnSuback(HandleSuback);
+  fParser.SetOnUnsuback(HandleUnsuback);
+  fParser.SetOnPing(HandlePing);
 
   fPublishQosOneDict := TDictionary<UInt16, string>.Create;
   fPublishQosTwoDict := TDictionary<UInt16, string>.Create;
@@ -284,34 +308,16 @@ begin
 end;
 
 procedure TMQTTClient.HandleDataAvailable(pData: TBytes);
-var
-  vPacketType: TMQTTControlPacket;
 begin
-  if Length(pData) >= 2 then
-  begin
-    Byte(vPacketType) := (pData[0] and $F0) shr 4;
-    case vPacketType of
-      TMQTTControlPacket.CONNACK: HandleConnack(pData);
-      TMQTTControlPacket.PUBLISH: HandlePublish(pData);
-      TMQTTControlPacket.PUBACK: HandlePuback(pData);
-      TMQTTControlPacket.PUBREC: HandlePubrec(pData);
-      TMQTTControlPacket.PUBCOMP: HandlePubComp(pData);
-      TMQTTControlPacket.SUBACK: HandleSuback(pData);
-      TMQTTControlPacket.UNSUBACK: HandleUnsuback(pData);
-      TMQTTControlPacket.PINGRESP: HandlePingResp;
-    end;
-  end;
+  fParser.InsertData(pData);
 end;
 {$ENDREGION}
 
 {$REGION PROTOCOL HANDLERS}
-procedure TMQTTClient.HandleConnack(pBytes: TBytes);
+procedure TMQTTClient.HandleConnack(pReturnCode: TConnackReturnCodes);
 begin
-  if (pBytes = nil) and (Length(pBytes) <> 4) then
-    Exit;
-
   //Still needs to handle SessionPresent (page 32)
-  case TConnackReturnCodes(pBytes[3]) of
+  case pReturnCode of
       TConnackReturnCodes.crcAccepted:
       begin
         fState := mcsConnected;
@@ -328,182 +334,94 @@ begin
   end;
 end;
 
-procedure TMQTTClient.HandlePuback(pBytes: TBytes);
+procedure TMQTTClient.HandlePuback(pPacketID: Word);
 var
-  vPacketID: UInt16;
   vPair: TPair<UInt16, string>;
 begin
-  if (pBytes = nil) and (Length(pBytes) < 4)then
-    Exit;
-
-  PByte(@vPacketID)[0] := pBytes[3]; //LSB
-  PByte(@vPacketID)[1] := pBytes[2]; //MSB
-  vPair := fPublishQosOneDict.ExtractPair(vPacketID);
+  vPair := fPublishQosOneDict.ExtractPair(pPacketID);
   if vPair.Value <> Default(string) then
     if Assigned(fOnPuback) then
       fOnPuback(vPair.Key, vPair.Value);
 end;
 
-procedure TMQTTClient.HandlePubrec(pBytes: TBytes);
+procedure TMQTTClient.HandlePubrec(pPacketID: Word);
 var
-  vPacketID: UInt16;
   vValue: string;
 begin
-  if (pBytes = nil) and (Length(pBytes) <> 4)then
-    Exit;
-
-  PByte(@vPacketID)[0] := pBytes[3]; //LSB
-  PByte(@vPacketID)[1] := pBytes[2]; //MSB
-  if fPublishQosTwoDict.TryGetValue(vPacketID, vValue) then
+  if fPublishQosTwoDict.TryGetValue(pPacketID, vValue) then
     if vValue <> Default(string) then
-      fSocket.Send(fPacketBuilder.BuildPubrelPacket(vPacketID));
+      fSocket.Send(fPacketBuilder.BuildPubrelPacket(pPacketID));
 end;
 
-procedure TMQTTClient.HandlePubComp(pBytes: TBytes);
+procedure TMQTTClient.HandlePubcomp(pPacketID: Word);
 var
-  vPacketID: UInt16;
   vPair: TPair<UInt16, string>;
 begin
-  if (pBytes = nil) and (Length(pBytes) < 4)then
-    Exit;
-
-  PByte(@vPacketID)[0] := pBytes[3]; //LSB
-  PByte(@vPacketID)[1] := pBytes[2]; //MSB
-  vPair := fPublishQosTwoDict.ExtractPair(vPacketID);
+  vPair := fPublishQosTwoDict.ExtractPair(pPacketID);
   if vPair.Value <> Default(string) then
     if Assigned(fOnPubComp) then
       fOnPubComp(vPair.Key, vPair.Value);
 end;
 
-procedure TMQTTClient.HandlePublish(pPacket: TBytes);
-const
-  c_RetainMask = 1;
-  c_QosMask = 6;
-  c_DupMask = 8;
-  c_PacketTypeMask = 240;
-var
-  vQoS: TQoSLevel;
-  //vRetain, vDup: Boolean;
-  vPacketType: TMQTTControlPacket;
-  vRemainingLength, vSize, vIndex, vPayloadSize: Integer;
-  vTopicLen, vPacketID: UInt16;
-  vTopicAsBytes, vPayload: TBytes;
-  vTopic: string;
+procedure TMQTTClient.HandlePublish(pPacketID: UInt16; const pTopic: string;
+  pPayload: TBytes);
 begin
-  // 1 - Fixed header
-  if Length(pPacket) < 5 then // Not sure about this one...
-    Exit;
-
-  //vRetain := (pPacket[0] and c_RetainMask) = 1;
-  vQos := TQoSLevel((pPacket[0] and c_QosMask) shr 1);
-  //vDup := ((pPacket[0] and c_DupMask) shr 3) = 1;
-  vPacketType := TMQTTControlPacket((pPacket[0] and c_PacketTypeMask) shr 4);
-
-  if vPacketType <> TMQTTControlPacket.PUBLISH then
-    Exit;
-
-  vRemainingLength := DecodeVarInt32(PByte(@pPacket[1]), vSize);
-  vIndex := 1 + vSize;
-
-  // 2 - Variable header
-  PByte(@vTopicLen)[0] := pPacket[vIndex + 1];
-  PByte(@vTopicLen)[1] := pPacket[vIndex];
-  Inc(vIndex, 2);
-  SetLength(vTopicAsBytes, vTopicLen);
-  Move(pPacket[vIndex], vTopicAsBytes[0], vTopicLen);
-  Inc(vIndex, vTopicLen);
-  if vQos in [qlAtLeastOnceDelivery..qlExactlyOnceDelivery] then
-  begin
-    PByte(@vPacketID)[1] := pPacket[vIndex];
-    PByte(@vPacketID)[0] := pPacket[vIndex + 1];
-    Inc(vIndex, 2);
-  end
-  else
-    vPacketID := 0;
-
-  // 3 - Payload (RemainingLen - VariableHaderLen = vPayloadLen)
-  vPayloadSize := vRemainingLength - (vTopicLen + 2);
-  if vQos in [qlAtLeastOnceDelivery..qlExactlyOnceDelivery] then
-    Dec(vPayloadSize, 2);
-  SetLength(vPayload, vPayloadSize);
-  Move(pPacket[vIndex], vPayload[0], vPayloadSize);
-
-  vTopic := TEncoding.UTF8.GetString(vTopicAsBytes);
   if Assigned(fOnPublish) then
-    fOnPublish(vPacketID, vTopic, vPayload);
+    fOnPublish(pPacketID, pTopic, pPayload);
 end;
 
-procedure TMQTTClient.HandleSuback(pPacket: TBytes);
+procedure TMQTTClient.HandleSuback(pPacketID: UInt16;
+  pQosLevels: TArray<Integer>);
 const
   c_SubackFailure = $80;
 var
-  vPacketIdentifier: UInt16;
-  vSize, vCount, vIndex: Integer;
+  vCount: Integer;
   vReturnCodes: TList<Integer>;
   vPair: TPair<UInt16, TArray<TTopicFilter>>;
 begin
-  if Length(pPacket) <= 4 then
-    Exit;
-
-  DecodeVarInt32(PByte(@pPacket[1]), vSize);
-  vIndex := 1 + vSize;
-
-  PByte(@vPacketIdentifier)[1] := pPacket[vIndex]; // MSB
-  PByte(@vPacketIdentifier)[0] := pPacket[vIndex + 1]; // LSB
-  Inc(vIndex, 2);
-
-  vPair := fSubscriptionsDict.ExtractPair(vPacketIdentifier);
+  vPair := fSubscriptionsDict.ExtractPair(pPacketID);
 
   if vPair.Value = Default(TArray<TTopicFilter>) then
     Exit;
 
   vReturnCodes := TList<Integer>.Create;
   try
-    for vCount := vIndex to Length(pPacket) - 1 do
+    for vCount := 0 to High(pQosLevels) do
     begin
-      if TQosLevel(pPacket[vCount]) in [qlAtMostOnceDelivery..qlExactlyOnceDelivery] then
-      begin
-        vReturnCodes.Add(vCount - vIndex);
-        if Assigned(fOnSubscribeSuccess) then
-          fOnSubscribeSuccess(vPacketIdentifier, TQosLevel(pPacket[vCount]),
-            vPair.Value[vCount - vIndex].Topic);
-      end
-      else if pPacket[vCount] = c_SubackFailure then
+      if pQosLevels[vCount] = c_SubackFailure then
       begin
         if Assigned(fOnSubscribeFailure) then
-          fOnSubscribeFailure(vPacketIdentifier, TQosLevel(pPacket[vCount]),
-            vPair.Value[vCount - vIndex].Topic);
+          fOnSubscribeFailure(pPacketID, TQosLevel(pQosLevels[vCount]),
+            vPair.Value[vCount].Topic);
+      end
+      else if TQosLevel(pQosLevels[vCount]) in [qlAtMostOnceDelivery..qlExactlyOnceDelivery] then
+      begin
+        vReturnCodes.Add(vCount);
+        if Assigned(fOnSubscribeSuccess) then
+          fOnSubscribeSuccess(pPacketID, TQosLevel(pQosLevels[vCount]),
+            vPair.Value[vCount].Topic);
       end
       else
         // Subscribe error event would be nice "fOnSubscribeError"
         raise Exception.Create(Format('Bad return code on suback. PacketIdentifier [%d]',
-          [vPacketIdentifier]));
+          [pPacketID]));
     end;
 
     for vCount := 0 to vReturnCodes.Count - 1 do
-      AddOrSetTopic(vPacketIdentifier, vPair.Value[vReturnCodes[vCount]])
-
+      AddOrSetTopic(pPacketID, vPair.Value[vReturnCodes[vCount]]);
   finally
     FreeAndNil(vReturnCodes);
   end;
 end;
 
-procedure TMQTTClient.HandleUnsuback(pBytes: TBytes);
+procedure TMQTTClient.HandleUnsuback(pPacketID: Word);
 var
-  vPacketIdentifier: UInt16;
   vPair: TPair<UInt16, TArray<string>>;
   vCount, vSubCount: Integer;
 begin
-  if Length(pBytes) < 4 then
-    Exit;
-
-  PByte(@vPacketIdentifier)[1] := pBytes[2]; // MSB
-  PByte(@vPacketIdentifier)[0] := pBytes[3]; // LSB
-
-  vPair := fUnsubscribeDict.ExtractPair(vPacketIdentifier);
+  vPair := fUnsubscribeDict.ExtractPair(pPacketID);
 
   if vPair.Value <> Default(TArray<string>) then
-  begin
     for vCount := 0 to High(vPair.Value) do
       for vSubCount := fCurrentSubscriptions.Count - 1 downto 0 do
         if vPair.Value[vCount] = fCurrentSubscriptions[vSubCount].TopicFilter.Topic then
@@ -511,13 +429,12 @@ begin
           fCurrentSubscriptions.Delete(vSubCount);
           Break;
         end;
-  end;
 
   if Assigned(fOnUnsubscribe) then
-    fOnUnsubscribe(vPacketIdentifier);
+    fOnUnsubscribe(pPacketID);
 end;
 
-procedure TMQTTClient.HandlePingResp;
+procedure TMQTTClient.HandlePing(pSender: TObject);
 begin
   if Assigned(fOnPingResp) then
     fOnPingResp(Self);
@@ -525,6 +442,11 @@ end;
 {$ENDREGION}
 
 {$REGION UTILITIES}
+function TMQTTClient.GetProtocolVersion: string;
+begin
+  Result := c_MQTTProtocolVersion311;
+end;
+
 function TMQTTClient.GetCurrentSubscriptions: TStringList;
 var
   vSubscriptions: TTopic;

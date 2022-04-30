@@ -8,7 +8,7 @@ uses
   MQTT.ITimer;
 
 type
-  TMQTTDefaultTimer = class(TInterfacedObject, IMQTTTimer)
+  TMQTTDefaultTimer = class(TInterfacedObject, ITimer)
   strict private
     fTimer: TTimer;
   public

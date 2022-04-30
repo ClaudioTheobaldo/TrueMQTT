@@ -88,7 +88,7 @@ begin
     cmbxQoS.AddItem(GetEnumName(TypeInfo(TQoSLevel), Byte(vQoS)), nil);
   cmbxQos.ItemIndex := 1;
 
-  fMQTTCli := TMQTTDefaultClientBuilder.NewDefaultClient(stOverbyte, 15);
+  fMQTTCli := TMQTTDefaultClientBuilder.BuildDefaultClient(stOverbyte, 15);
   fMQTTCli.OnConnected := HandleConnected;
   fMQTTCli.OnDisconnected := HandleDisconnected;
   fMQTTCli.OnPuback := HandlePublishAcknowledge;
@@ -106,13 +106,13 @@ end;
 
 procedure TfrmMQTT.btnConnectClick(Sender: TObject);
 begin
-{
-(const pHost: string; pPort: UInt16;
-      const pClientID: string = ''; pWillQos: TQosLevel = qlAtMostOnceDelivery;
-      pWillRetain: Boolean = False; const pWillTopic: string = '';
-      const pWillMessage: string = ''; const pUsername: string = '';
-      const pPassword: string = ''): Boolean; overload;
-}
+  {
+    (const pHost: string; pPort: UInt16;
+        const pClientID: string = ''; pWillQos: TQosLevel = qlAtMostOnceDelivery;
+        pWillRetain: Boolean = False; const pWillTopic: string = '';
+        const pWillMessage: string = ''; const pUsername: string = '';
+        const pPassword: string = ''): Boolean; overload;
+  }
   if not fMQTTCli.Connect(edtHost.Text, StrToInt(edtPort.Text), edtClientId.Text,
     TQosLevel(cmbxQos.ItemIndex), False, edtWillTopic.Text, edtWillMessage.Text,
     edtUsername.Text, edtPassword.Text) then

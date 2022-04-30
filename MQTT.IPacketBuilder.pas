@@ -1,4 +1,4 @@
-unit MQTT.IMQTTPacketBuilder;
+unit MQTT.IPacketBuilder;
 
 interface
 
@@ -7,7 +7,7 @@ uses
   MQTT.Types;
 
 type
-  IMQTTPacketBuilder = interface
+  IPacketBuilder = interface
   ['{D0091A10-3FCD-49AC-83C0-7A2003F003CB}']
     function BuildConnectPacket(pKeepAliveInterval: UInt16; pClientParams: TConnectParams): TBytes;
     function BuildPublishPacket(const pTopic: string; pPayload: TBytes;
